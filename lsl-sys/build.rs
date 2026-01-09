@@ -1,5 +1,4 @@
 use std::env;
-use std::path::Path;
 
 fn main() {
     // Check for system liblsl
@@ -21,21 +20,6 @@ fn link_to_system_liblsl() -> bool {
         return true;
     }
 
-    // Check homebrew path on macOS
-    #[cfg(target_os = "macos")]
-    {
-        if let Ok(homebrew) = env::var("HOMEBREW_PREFIX") {
-            let path = &format!("{}/lib", homebrew);
-            let lib_file = Path::new(path).join("liblsl.dylib");
-            if lib_file.exists() {
-                println!("cargo:rustc-link-search=native={}", path);
-                println!("cargo:rustc-link-lib=dylib=lsl");
-                println!("liblsl at {}", lib_file.display());
-                return true;
-            }
-        }
-    }
-    // TODO: automatic finding for Linux and Windows
     // Fallback to building from source
     false
 }
@@ -43,7 +27,7 @@ fn link_to_system_liblsl() -> bool {
 // Build the liblsl library from source using cmake
 fn build_liblsl() {
     let target = env::var("TARGET").unwrap();
-    
+
     // build with cmake
     let mut cfg = cmake::Config::new("liblsl");
     cfg
@@ -56,7 +40,7 @@ fn build_liblsl() {
         // * /GR enables RTTI
         // * /MD links in the msvcrt as a DLL instead of statically
         let cxx_args = " /nologo /EHsc /MD /GR";
-        cfg 
+        cfg
             .define("WIN32", "1")
             .define("_WINDOWS", "1")
             .define("CMAKE_C_FLAGS", cxx_args)
@@ -81,7 +65,7 @@ fn build_liblsl() {
     if target.contains("linux") {
         println!("cargo:rustc-link-lib=dylib=stdc++");
     } else if target.contains("windows") {
-        // TODO: this is a shortcoming in the current cmake file, which should be       
+        // TODO: this is a shortcoming in the current cmake file, which should be
         //       linking in this library (once this is fixed, we should remove this)
         println!("cargo:rustc-link-lib=dylib=bcrypt");
     } else {
