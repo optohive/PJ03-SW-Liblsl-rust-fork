@@ -2,42 +2,8 @@ use std::env;
 use std::path::Path;
 
 fn main() {
-    // Check for system liblsl
-    if link_to_system_liblsl() {
-        return;
-    }
-
-    println!("cargo:warning={}", "rebuilding...");
+    println!("cargo:warning={}", "Building LSL from soruce...");
     build_liblsl();
-}
-
-// Try to link to a system-installed dynamic liblsl
-fn link_to_system_liblsl() -> bool {
-    // If lsl path set with environment variable
-    if let Ok(lib_path) = env::var("LIBLSL_LIB_DIR") {
-        println!("cargo:rustc-link-search=native={}", lib_path);
-        println!("cargo:rustc-link-lib=dylib=lsl");
-        println!("liblsl at {}", lib_path);
-        return true;
-    }
-
-    // Check homebrew path on macOS
-    #[cfg(target_os = "macos")]
-    {
-        if let Ok(homebrew) = env::var("HOMEBREW_PREFIX") {
-            let path = &format!("{}/lib", homebrew);
-            let lib_file = Path::new(path).join("liblsl.dylib");
-            if lib_file.exists() {
-                println!("cargo:rustc-link-search=native={}", path);
-                println!("cargo:rustc-link-lib=dylib=lsl");
-                println!("liblsl at {}", lib_file.display());
-                return true;
-            }
-        }
-    }
-    // TODO: automatic finding for Linux and Windows
-    // Fallback to building from source
-    false
 }
 
 // Build the liblsl library from source using cmake
@@ -49,6 +15,14 @@ fn build_liblsl() {
     cfg
         .define("LSL_NO_FANCY_LIBNAME", "ON")
         .define("LSL_BUILD_STATIC", "ON");
+    
+    // Disable framework build on macOS
+    // It doesn't work otherwise
+    #[cfg(target_os = "macos")]
+    {
+        cfg.define("LSL_FRAMEWORK", "OFF");
+    } 
+    
     if target.contains("msvc") {
         // override some C/CXX flags that the cmake crate splices in on Windows
         // (these cause the build to fail)...
