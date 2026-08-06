@@ -37,6 +37,7 @@ use std::ffi;
 use std::fmt;
 use std::rc;
 use std::vec;
+use std::ffi::c_char;
 
 /// Constant to indicate that a stream has variable sampling rate.
 pub const IRREGULAR_RATE: f64 = 0.0;
@@ -683,6 +684,20 @@ impl StreamOutlet {
         Ok(())
     }
 
+    fn safe_push_char(
+        &self,
+        data: &vec::Vec<i8>,
+        timestamp: f64,
+        pushthrough: bool,
+    ) -> Result<()> {
+        self.assert_len(data.len());
+
+        unsafe {
+            errcode_to_result(lsl_push_sample_ctp(self.handle, data.as_ptr().cast::<c_char>(), timestamp, pushthrough as i32,))?;
+        }
+        Ok(())
+    }
+
     /*
     Internal helper to implement `push_sample()` for value types that can be converted to `&[u8]`
     byte slices via `.as_ref()`.
@@ -901,7 +916,7 @@ impl ExPushable<vec::Vec<f64>> for StreamOutlet {
 
 impl ExPushable<vec::Vec<i8>> for StreamOutlet {
     fn push_sample_ex(&self, data: &vec::Vec<i8>, timestamp: f64, pushthrough: bool) -> Result<()> {
-        self.safe_push_numeric(lsl_push_sample_ctp, data, timestamp, pushthrough)
+        self.safe_push_char(data, timestamp, pushthrough)
     }
 }
 
@@ -1365,6 +1380,42 @@ impl StreamInlet {
 
     // --- internal methods ---
 
+    fn safe_pull_char_buf(
+        &self,
+        buf: &mut vec::Vec<i8>,
+        timeout: f64,
+    ) -> Result<f64> {
+        let mut ec = [0i32];
+
+        if buf.len() != self.channel_count {
+            buf.resize(self.channel_count, 0);
+        }
+
+        unsafe {
+            let ts = lsl_pull_sample_c(
+                self.handle,
+                buf.as_mut_ptr().cast::<c_char>(),
+                buf.len() as i32,
+                timeout,
+                ec.as_mut_ptr(),
+            );
+
+            errcode_to_result(ec[0])?;
+            Ok(ts)
+        }
+    }
+
+    fn safe_pull_char(&self, timeout: f64) -> Result<(vec::Vec<i8>, f64)> {
+        let mut result = vec![0i8; self.channel_count];
+        let ts = self.safe_pull_char_buf(&mut result, timeout)?;
+
+        if ts == 0.0 {
+            result.clear();
+        }
+
+        Ok((result, ts))
+    }
+
     /*
     Internal helper to implement `pull_sample_buf()` safely for numeric value types, given a native
     function to do the actual job.
@@ -1647,11 +1698,11 @@ impl Pullable<i16> for StreamInlet {
 
 impl Pullable<i8> for StreamInlet {
     fn pull_sample(&self, timeout: f64) -> Result<(vec::Vec<i8>, f64)> {
-        self.safe_pull_numeric(lsl_pull_sample_c, timeout)
+        self.safe_pull_char(timeout)
     }
 
     fn pull_sample_buf(&self, buf: &mut vec::Vec<i8>, timeout: f64) -> Result<f64> {
-        self.safe_pull_numeric_buf(lsl_pull_sample_c, buf, timeout)
+        self.safe_pull_char_buf(buf, timeout)
     }
 }
 
