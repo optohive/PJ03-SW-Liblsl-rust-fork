@@ -1,6 +1,6 @@
 [package]
 name = "lsl-sys"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Intheon <contact@intheon.io>", "Christian Kothe <christian.kothe@intheon.io>"]
 edition = "2018"
 description = "Low-level bindings to the system liblsl library (lab streaming layer)."
